@@ -691,7 +691,9 @@ ${futureSettings}
   const mainAccount = accountBalances?.find((a: AccountBalance) => a.id === 'main');
 
   const variableCategories = categoryBudgets.filter((c: CategoryBudget) => !(c.name || '').includes('必要経費') && !(c.name || '').includes('固定費'));
-  const variableFreeMoney = variableCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0);
+  const fixedCategories = categoryBudgets.filter((c: CategoryBudget) => (c.name || '').includes('必要経費') || (c.name || '').includes('固定費'));
+  const fixedDeficits = fixedCategories.reduce((sum: number, c: CategoryBudget) => sum + Math.min(0, c.remaining || 0), 0);
+  const variableFreeMoney = variableCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0) + fixedDeficits;
 
   // Calculate Target Review Month Data
   const todayForLastMonth = new Date();
@@ -735,7 +737,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.55</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.56</span>
         </p>
       </header>
 
@@ -752,7 +754,7 @@ ${futureSettings}
           <div className="stat-title">今月自由に使えるお金</div>
           <div className="stat-value" style={{ color: 'var(--accent-color)' }}>{formatCurrency(variableFreeMoney)}</div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-            ※固定費を除く, 各カテゴリの残り予算の合計
+            ※各カテゴリの残り予算の合計（固定費は赤字分のみマイナス反映）
           </div>
           {variableWishlistDeductions > 0 && (
             <div style={{ fontSize: '0.9rem', color: '#d97706', marginTop: '10px', fontWeight: 'bold' }}>
