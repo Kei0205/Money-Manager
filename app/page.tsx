@@ -695,6 +695,8 @@ ${futureSettings}
   const fixedDeficits = fixedCategories.reduce((sum: number, c: CategoryBudget) => sum + Math.min(0, c.remaining || 0), 0);
   const variableFreeMoney = variableCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0) + fixedDeficits;
 
+  const unrecoveredAdvances = (data?.records || []).filter((r: any) => r.recordType === 'advance_payment' && !r.description?.includes('（回収済）'));
+
   // Calculate Target Review Month Data
   const todayForLastMonth = new Date();
   let lastM = todayForLastMonth.getMonth(); // 0-11
@@ -737,7 +739,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.56</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.57</span>
         </p>
       </header>
 
@@ -829,9 +831,58 @@ ${futureSettings}
           <div className="glass-card highlight" style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
             <div className="stat-title" style={{ color: '#ef4444' }}>🤝 未回収の立替金</div>
             <div className="stat-value" style={{ color: '#ef4444' }}>{formatCurrency(summary.unrecoveredAdvance)}</div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-              ※友人の代わりに支払った金額。総資産からは減っていますが, 月々の予算グラフには影響しません。回収したら下のRecent Activityから「✓ 回収」を押してください。
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '5px', marginBottom: '10px' }}>
+              ※友人の代わりに支払った金額。総資産からは減っていますが, 月々の予算グラフには影響しません。回収したら各項目の「✓ 回収」を押してください。
             </div>
+            {unrecoveredAdvances.length > 0 && (
+              <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {unrecoveredAdvances.map((adv: any) => (
+                  <div key={adv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.8)', padding: '8px', borderRadius: '8px', border: '1px solid #fecaca' }}>
+                    <div style={{ fontSize: '0.85rem', color: '#7f1d1d' }}>
+                      <span style={{ fontWeight: 'bold' }}>{adv.date}</span> - {adv.description} <br/>
+                      <span style={{ fontWeight: 'bold' }}>{formatCurrency(parseFloat(adv.expense) || 0)}</span>
+                    </div>
+                    <div>
+                      {confirmRecoveryId === adv.id ? (
+                        <button 
+                          onClick={async () => {
+                            setConfirmRecoveryId(null);
+                            const payload = {
+                              date: new Date().toISOString().split('T')[0].replace(/-/g, '/'),
+                              category: '入金',
+                              description: `${adv.description} (立替回収)`,
+                              amount: parseFloat(adv.expense) || 0,
+                              recordType: 'advance_recovery'
+                            };
+                            await fetch('/api/finance', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'add_expense', payload })
+                            });
+                            await fetch('/api/finance', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'edit_record', payload: { id: adv.id, ...adv, description: adv.description ? `${adv.description} （回収済）` : '（回収済）' } })
+                            });
+                            fetchData();
+                          }}
+                          className="action-button secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem', background: '#16a34a', color: 'white', borderColor: '#16a34a', whiteSpace: 'nowrap' }}
+                        >
+                          回収する
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => setConfirmRecoveryId(adv.id ?? null)}
+                          className="action-button secondary" style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem', background: '#dcfce3', color: '#166534', borderColor: '#bbf7d0', whiteSpace: 'nowrap' }}
+                        >
+                          ✓ 回収
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
