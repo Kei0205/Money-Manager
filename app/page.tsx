@@ -353,32 +353,17 @@ function DashboardContent() {
     setIsDeepAnalyzing(true);
     try {
       const isPastMonth = selectedMonth < currentRealMonth;
-      const targetSettings = data?.monthlySettings?.[selectedMonth] || { fixedExpenses: [] };
+      const variableCategoriesForAI = (data?.categoryBudgets || []).filter((c: any) => !(c.name || '').includes('必要経費') && !(c.name || '').includes('固定費'));
       
-      const aiExpenses = targetSettings.fixedExpenses
-        .filter((f: any) => !ignoredBudgetCategories.includes(f.name) && !f.name.includes('固定') && !f.name.includes('必要経費'))
-        .map((f: any) => {
-          const pieCat = generatedPieData.find((p: any) => p.name === f.name);
-          return {
-            category: f.name,
-            spent: pieCat ? pieCat.value : 0,
-            budget: parseFloat(String(f.amount)) || 0
-          };
-        });
-
-      generatedPieData.forEach((p: any) => {
-        if (!aiExpenses.find((e: any) => e.category === p.name) && !ignoredBudgetCategories.includes(p.name) && !p.name.includes('固定') && !p.name.includes('必要経費')) {
-          aiExpenses.push({
-            category: p.name,
-            spent: p.value,
-            budget: 0
-          });
-        }
-      });
+      const aiExpenses = variableCategoriesForAI.map((c: any) => ({
+        category: c.name,
+        spent: c.spent || 0,
+        budget: c.pool || 0
+      }));
 
       const aiTotalVarBudget = aiExpenses.reduce((acc: number, c: any) => acc + c.budget, 0);
       const aiTotalVarSpent = aiExpenses.reduce((acc: number, c: any) => acc + c.spent, 0);
-      const aiFreeMoney = aiTotalVarBudget - aiTotalVarSpent;
+      const aiFreeMoney = variableCategoriesForAI.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
       
       // Generate historical data text for the AI
       let historicalDataText = '';
@@ -742,7 +727,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.59</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.60</span>
         </p>
       </header>
 
@@ -1260,14 +1245,14 @@ ${futureSettings}
             width: '100%',
             transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
             transformStyle: 'preserve-3d',
-            transform: deepAnalysis ? 'rotateY(180deg)' : 'rotateY(0deg)'
+            transform: (deepAnalysis || isDeepAnalyzing) ? 'rotateY(180deg)' : 'rotateY(0deg)'
           }}>
             {/* FRONT FACE: Expense Pie Chart */}
             <div style={{
               width: '100%',
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
-              pointerEvents: deepAnalysis ? 'none' : 'auto',
+              pointerEvents: (deepAnalysis || isDeepAnalyzing) ? 'none' : 'auto',
             }}>
               <ExpensePieChart
                 selectedMonth={selectedMonth}
@@ -1292,7 +1277,7 @@ ${futureSettings}
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
-              pointerEvents: deepAnalysis ? 'auto' : 'none',
+              pointerEvents: (deepAnalysis || isDeepAnalyzing) ? 'auto' : 'none',
             }}>
               <div className="glass-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: '1px solid #e9d5ff', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
@@ -1305,19 +1290,26 @@ ${futureSettings}
                   >×</button>
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', lineHeight: '1.6', fontSize: '0.95rem', overflowY: 'auto', flex: 1, paddingRight: '10px' }}>
-                  {(deepAnalysis || '').split('\n').map((line, i) => {
-                    const parts = line.split(/(\*\*.*?\*\*)/g);
-                    return (
-                      <div key={i} style={{ marginBottom: line.trim() === '' ? '0.5rem' : '0' }}>
-                        {parts.map((part, j) => {
-                          if (part.startsWith('**') && part.endsWith('**')) {
-                            return <strong key={j} style={{ color: 'var(--accent-color)' }}>{part.slice(2, -2)}</strong>;
-                          }
-                          return part;
-                        })}
-                      </div>
-                    );
-                  })}
+                  {isDeepAnalyzing ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                      <div className="spinner" style={{ marginBottom: '1rem', width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #9333ea', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      <div>AIが家計データを分析し、インサイトを生成しています...</div>
+                    </div>
+                  ) : (
+                    (deepAnalysis || '').split('\n').map((line, i) => {
+                      const parts = line.split(/(\*\*.*?\*\*)/g);
+                      return (
+                        <div key={i} style={{ marginBottom: line.trim() === '' ? '0.5rem' : '0' }}>
+                          {parts.map((part, j) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                              return <strong key={j} style={{ color: 'var(--accent-color)' }}>{part.slice(2, -2)}</strong>;
+                            }
+                            return part;
+                          })}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: '1rem', flexShrink: 0 }}>
                   <button 
