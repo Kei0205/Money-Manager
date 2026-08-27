@@ -8,7 +8,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'GEMINI_API_KEY が設定されていません。' }, { status: 400 });
     }
     
-    const { month, expenses, budget, freeMoney, totalSpent, isPastMonth, historicalDataText, daysPassed, totalDays, activeWishlist, detailedRecords } = await req.json();
+    const { month, expenses, budget, freeMoney, earmarkedMoney, totalSpent, isPastMonth, historicalDataText, daysPassed, totalDays, activeWishlist, detailedRecords } = await req.json();
 
     const ai = new GoogleGenAI({ apiKey });
 
@@ -32,7 +32,8 @@ export async function POST(req: Request) {
 ・月の経過日数: ${daysPassed || 30}日 / ${totalDays || 30}日 (完了)
 ・全体の変動費予算: $${budget}
 ・実際の変動費支出: $${totalSpent}
-・予算に対する結果: ${freeMoney > 0 ? `+$${freeMoney} (黒字)` : `-$${Math.abs(freeMoney)} (赤字)`}
+・純粋なフリー余裕資金: ${freeMoney > 0 ? `+$${freeMoney} (黒字)` : `-$${Math.abs(freeMoney)} (赤字)`}
+・目的別積立の残高（衣服・自己投資）: $${earmarkedMoney}
 
 【カテゴリ別支出内訳】
 ${expenses.map((e: any) => `- ${e.category}: $${e.spent} (予算: $${e.budget || 0})`).join('\n')}
@@ -54,8 +55,8 @@ ${historicalDataText ? `【全期間の過去支出履歴（比較・傾向分�
 ・月の経過日数: ${daysPassed || 1}日 / ${totalDays || 30}日 (${Math.round(((daysPassed || 1) / (totalDays || 30)) * 100)}%経過)
 ・全体の変動費予算: $${budget}
 ・現在の変動費支出: $${totalSpent}
-・現在の余裕資金: $${freeMoney}
-
+・現在の純粋なフリー余裕資金: ${freeMoney > 0 ? `+$${freeMoney} (黒字)` : `-$${Math.abs(freeMoney)} (赤字)`}
+・目的別積立の残高（衣服・自己投資等）: $${earmarkedMoney}
 【カテゴリ別支出内訳】
 ${expenses.map((e: any) => `- ${e.category}: $${e.spent} (予算: $${e.budget || 0})`).join('\n')}
 ${detailedRecordsText}

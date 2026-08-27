@@ -363,7 +363,12 @@ function DashboardContent() {
 
       const aiTotalVarBudget = aiExpenses.reduce((acc: number, c: any) => acc + c.budget, 0);
       const aiTotalVarSpent = aiExpenses.reduce((acc: number, c: any) => acc + c.spent, 0);
-      const aiFreeMoney = variableCategoriesForAI.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+      
+      const aiEarmarkedCategories = variableCategoriesForAI.filter((c: any) => ['環境・自己投資', '衣服代'].includes(c.name || ''));
+      const aiGeneralFreeCategories = variableCategoriesForAI.filter((c: any) => !['環境・自己投資', '衣服代'].includes(c.name || ''));
+      
+      const aiFreeMoney = aiGeneralFreeCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+      const aiEarmarkedMoney = aiEarmarkedCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
       
       // Generate historical data text for the AI
       let historicalDataText = '';
@@ -427,6 +432,7 @@ function DashboardContent() {
           expenses: aiExpenses,
           budget: aiTotalVarBudget,
           freeMoney: aiFreeMoney,
+          earmarkedMoney: aiEarmarkedMoney,
           totalSpent: aiTotalVarSpent,
           isPastMonth,
           historicalDataText,
@@ -681,7 +687,11 @@ ${futureSettings}
   
   eventFundCovered += fixedDeficits; // User requested: 固定費の赤字はイベント費から引く
 
-  const variableFreeMoney = variableCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0);
+  const earmarkedCategories = variableCategories.filter((c: CategoryBudget) => ['環境・自己投資', '衣服代'].includes(c.name || ''));
+  const generalFreeCategories = variableCategories.filter((c: CategoryBudget) => !['環境・自己投資', '衣服代'].includes(c.name || ''));
+
+  const variableFreeMoney = generalFreeCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0);
+  const earmarkedMoney = earmarkedCategories.reduce((sum: number, c: CategoryBudget) => sum + (c.remaining || 0), 0);
 
   const unrecoveredAdvances = (data?.records || []).filter((r: any) => r.recordType === 'advance_payment' && !r.description?.includes('（回収済）'));
 
@@ -727,7 +737,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.60</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.61</span>
         </p>
       </header>
 
@@ -744,8 +754,13 @@ ${futureSettings}
           <div className="stat-title">今月自由に使えるお金</div>
           <div className="stat-value" style={{ color: 'var(--accent-color)' }}>{formatCurrency(variableFreeMoney)}</div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '5px' }}>
-            ※固定費を除く、各カテゴリの残り予算の合計
+            ※衣服・自己投資等の目的別積立を除く、フリー予算の合計
           </div>
+          {earmarkedMoney > 0 && (
+            <div style={{ fontSize: '0.85rem', color: '#0369a1', marginTop: '8px', padding: '4px 8px', background: 'rgba(255,255,255,0.6)', borderRadius: '6px' }}>
+              👔 衣服・自己投資用の積立残高: {formatCurrency(earmarkedMoney)}
+            </div>
+          )}
           {variableWishlistDeductions > 0 && (
             <div style={{ fontSize: '0.9rem', color: '#d97706', marginTop: '10px', fontWeight: 'bold' }}>
               使用検討中の合計: {formatCurrency(variableWishlistDeductions)}
