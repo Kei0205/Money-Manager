@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     }
 
     const { modelName } = await req.json();
-    const modelToUse = modelName || 'gemini-3.5-flash';
+    const modelToUse = modelName || 'gemini-3.6-flash';
 
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
