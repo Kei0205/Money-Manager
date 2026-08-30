@@ -737,7 +737,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.61</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.62</span>
         </p>
       </header>
 
@@ -1268,6 +1268,8 @@ ${futureSettings}
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               pointerEvents: (deepAnalysis || isDeepAnalyzing) ? 'none' : 'auto',
+              opacity: (deepAnalysis || isDeepAnalyzing) ? 0 : 1,
+              transition: 'opacity 0.6s',
             }}>
               <ExpensePieChart
                 selectedMonth={selectedMonth}
@@ -1293,6 +1295,8 @@ ${futureSettings}
               WebkitBackfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
               pointerEvents: (deepAnalysis || isDeepAnalyzing) ? 'auto' : 'none',
+              opacity: (deepAnalysis || isDeepAnalyzing) ? 1 : 0,
+              transition: 'opacity 0.6s',
             }}>
               <div className="glass-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: '1px solid #e9d5ff', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', padding: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexShrink: 0 }}>
