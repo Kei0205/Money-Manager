@@ -228,6 +228,11 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .header-title {
   font-size: 2.5rem;
   font-weight: 800;
