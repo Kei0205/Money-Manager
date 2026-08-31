@@ -311,16 +311,16 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
             })}
           </svg>
 
-          <div style={{ background: 'var(--surface-color)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.02)' }}>
               <h3 style={{ margin: 0, display: 'flex', justifyContent: 'space-between' }}>
                 <span>📄 未照合のCSVデータ ({csvRecords.length}件)</span>
                 <span style={{ color: 'var(--accent-color)' }}>選択合計: {formatCurrency(csvTotal)}</span>
               </h3>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }} onScroll={updateLines}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px', minHeight: 0 }} onScroll={updateLines}>
               <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                <thead style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                <thead style={{ background: 'rgba(0,0,0,0.02)', textAlign: 'left' }}>
                   <tr>
                     <th style={{ padding: '8px' }}>選択</th>
                     <th style={{ padding: '8px' }}>日付</th>
@@ -341,7 +341,7 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
                         cursor: 'pointer', 
                         background: groupColor ? `${groupColor}22` : (isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'),
                         borderLeft: groupColor ? `4px solid ${groupColor}` : 'none',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)'
+                        borderBottom: '1px solid rgba(0,0,0,0.05)'
                       }}>
                         <td style={{ padding: '8px' }}><input type="checkbox" checked={isSelected} readOnly /></td>
                         <td style={{ padding: '8px' }}>{r.date}</td>
@@ -356,16 +356,16 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
             </div>
           </div>
 
-          <div style={{ background: 'var(--surface-color)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ padding: '15px', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.02)' }}>
               <h3 style={{ margin: 0, display: 'flex', justifyContent: 'space-between' }}>
                 <span>📱 未照合のアプリデータ</span>
                 <span style={{ color: 'var(--accent-color)' }}>選択合計: {formatCurrency(appTotal)}</span>
               </h3>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }} onScroll={updateLines}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px', minHeight: 0 }} onScroll={updateLines}>
               <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                <thead style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                <thead style={{ background: 'rgba(0,0,0,0.02)', textAlign: 'left' }}>
                   <tr>
                     <th style={{ padding: '8px' }}>選択</th>
                     <th style={{ padding: '8px' }}>日付</th>
@@ -374,42 +374,37 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
                   </tr>
                 </thead>
                 <tbody>
-                  {((data?.records || [])
-                    .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
-                    .filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0)).length === 0) && (
+                  {unreconciled.length === 0 && (
                       <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>未照合のデータがありません</td></tr>
                   )}
-                  {(data?.records || [])
-                    .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
-                    .filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0))
-                    .map((r: Transaction) => {
-                      const isSelected = selectedAppIndices.has(r.originalIndex ?? -1);
-                      const isIncome = r.income > 0;
-                      const amount = isIncome ? r.income : r.expense;
-                      const groupIdx = matchGroups.findIndex(g => g.appIndices.includes(r.originalIndex ?? -1));
-                      const groupColor = groupIdx !== -1 ? MATCH_COLORS[groupIdx % MATCH_COLORS.length] : null;
+                  {unreconciled.map((r: Transaction) => {
+                    const isSelected = selectedAppIndices.has(r.originalIndex ?? -1);
+                    const isIncome = r.income > 0;
+                    const amount = isIncome ? r.income : r.expense;
+                    const groupIdx = matchGroups.findIndex(g => g.appIndices.includes(r.originalIndex ?? -1));
+                    const groupColor = groupIdx !== -1 ? MATCH_COLORS[groupIdx % MATCH_COLORS.length] : null;
 
-                      return (
-                        <tr key={r.originalIndex} data-app-index={r.originalIndex} onClick={() => handleAppClick(r.originalIndex ?? -1)} style={{ 
-                          cursor: 'pointer', 
-                          background: groupColor ? `${groupColor}22` : (isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'),
-                          borderRight: groupColor ? `4px solid ${groupColor}` : 'none',
-                          borderBottom: '1px solid rgba(255,255,255,0.05)'
-                        }}>
-                          <td style={{ padding: '8px' }}><input type="checkbox" checked={isSelected} readOnly /></td>
-                          <td style={{ padding: '8px' }}>{r.date}</td>
-                          <td style={{ padding: '8px' }}>{r.category}</td>
-                          <td className={isIncome ? 'income' : 'expense'} style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(amount)}</td>
-                        </tr>
-                      );
-                    })}
+                    return (
+                      <tr key={r.originalIndex} data-app-index={r.originalIndex} onClick={() => handleAppClick(r.originalIndex ?? -1)} style={{ 
+                        cursor: 'pointer', 
+                        background: groupColor ? `${groupColor}22` : (isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'),
+                        borderRight: groupColor ? `4px solid ${groupColor}` : 'none',
+                        borderBottom: '1px solid rgba(0,0,0,0.05)'
+                      }}>
+                        <td style={{ padding: '8px' }}><input type="checkbox" checked={isSelected} readOnly /></td>
+                        <td style={{ padding: '8px' }}>{r.date}</td>
+                        <td style={{ padding: '8px' }}>{r.category}</td>
+                        <td className={isIncome ? 'income' : 'expense'} style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(amount)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: '20px', padding: '20px', background: 'var(--surface-color)', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ marginTop: '20px', padding: '20px', background: '#ffffff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: '1.2rem', marginBottom: '5px' }}>
               差額: <span style={{ color: Math.abs(diff) < 0.01 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>{formatCurrency(diff)}</span>
