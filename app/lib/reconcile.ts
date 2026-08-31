@@ -98,53 +98,122 @@ export const matchOneToMany = (
 
 export function deduplicateBankRecords(bankRecords: Transaction[], reconciledRecords: Transaction[]) {
   const usedDbIndices = new Set<number>();
+  const usedBankIndices = new Set<number>();
   const parseDate = (dstr: string) => new Date(dstr).getTime();
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  return bankRecords.filter(b => {
+  // Pass 1: 1-to-1 strict exact match
+  for (let i = 0; i < bankRecords.length; i++) {
+     if (usedBankIndices.has(i)) continue;
+     const b = bankRecords[i];
+     const bAmt = (b.expense || 0) - (b.income || 0);
+     const bTime = parseDate(b.date);
+     
+     let bestMatch = -1;
+     let minDiff = Infinity;
+     for (let j = 0; j < reconciledRecords.length; j++) {
+        if (usedDbIndices.has(j)) continue;
+        const a = reconciledRecords[j];
+        const aAmt = (a.expense || 0) - (a.income || 0);
+        const aTime = parseDate(a.date);
+        if (Math.abs(bAmt - aAmt) < 0.01) {
+           const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
+           if (daysDiff <= 3 && daysDiff < minDiff) { 
+              minDiff = daysDiff;
+              bestMatch = j;
+           }
+        }
+     }
+     
+     if (bestMatch !== -1) {
+        usedDbIndices.add(bestMatch);
+        usedBankIndices.add(i);
+     }
+  }
+
+  // Pass 2: 1-to-N DP Branch and Bound
+  for (let i = 0; i < bankRecords.length; i++) {
+     if (usedBankIndices.has(i)) continue;
+     const b = bankRecords[i];
+     const bAmt = (b.expense || 0) - (b.income || 0);
+     const bTime = parseDate(b.date);
+     
+     const candidates: Transaction[] = [];
+     for (let j = 0; j < reconciledRecords.length; j++) {
+        if (usedDbIndices.has(j)) continue;
+        const aTime = parseDate(reconciledRecords[j].date);
+        if (Math.abs(bTime - aTime) / DAY_MS <= 14) {
+           candidates.push({ ...reconciledRecords[j], originalIndex: j });
+        }
+     }
+     
+     const match = matchOneToMany(bAmt, bTime, candidates, 60);
+     if (match) {
+        match.matchedIndices.forEach((idx: number) => usedDbIndices.add(idx));
+        usedBankIndices.add(i);
+     }
+  }
+
+  // Pass 3: N-to-1 matching (N Bank to 1 App)
+  for (let j = 0; j < reconciledRecords.length; j++) {
+     if (usedDbIndices.has(j)) continue;
+     const a = reconciledRecords[j];
+     const aAmt = (a.expense || 0) - (a.income || 0);
+     const aTime = parseDate(a.date);
+     
+     const candidates: Transaction[] = [];
+     for (let i = 0; i < bankRecords.length; i++) {
+        if (usedBankIndices.has(i)) continue;
+        const bTime = parseDate(bankRecords[i].date);
+        if (Math.abs(bTime - aTime) / DAY_MS <= 14) {
+           candidates.push({ ...bankRecords[i], index: i });
+        }
+     }
+     
+     const match = matchOneToMany(aAmt, aTime, candidates, 60);
+     if (match) {
+        usedDbIndices.add(j);
+        match.matchedIndices.forEach((idx: number) => usedBankIndices.add(idx));
+     }
+  }
+
+  // Pass 4: Fuzzy 1-to-1 (Optional for deduplication)
+  for (let i = 0; i < bankRecords.length; i++) {
+    if (usedBankIndices.has(i)) continue;
+    const b = bankRecords[i];
     const bAmt = (b.expense || 0) - (b.income || 0);
     const bTime = parseDate(b.date);
     
-    // First pass: 1-to-1 strict exact match
     let bestMatch = -1;
     let minDiff = Infinity;
-    for (let j = 0; j < reconciledRecords.length; j++) {
-       if (usedDbIndices.has(j)) continue;
-       const a = reconciledRecords[j];
-       const aAmt = (a.expense || 0) - (a.income || 0);
-       const aTime = parseDate(a.date);
-       if (Math.abs(bAmt - aAmt) < 0.01) {
-          const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
-          if (daysDiff <= 3 && daysDiff < minDiff) { // strict date limit for 1-to-1
-             minDiff = daysDiff;
-             bestMatch = j;
-          }
-       }
-    }
     
+    for (let j = 0; j < reconciledRecords.length; j++) {
+      if (usedDbIndices.has(j)) continue;
+      const a = reconciledRecords[j];
+      const aAmt = (a.expense || 0) - (a.income || 0);
+      const aTime = parseDate(a.date);
+      
+      const diffCents = Math.abs(toCents(bAmt) - toCents(aAmt));
+      if (diffCents === 0) continue; 
+      
+      const isWithin300Cents = diffCents <= 300;
+      const isWithin20Percent = diffCents <= Math.abs(toCents(bAmt)) * 0.2;
+      
+      if (isWithin300Cents || isWithin20Percent) {
+        const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
+        if (daysDiff <= 3 && daysDiff < minDiff) {
+          minDiff = daysDiff;
+          bestMatch = j;
+        }
+      }
+    }
     if (bestMatch !== -1) {
-       usedDbIndices.add(bestMatch);
-       return false;
+      usedDbIndices.add(bestMatch);
+      usedBankIndices.add(i);
     }
+  }
 
-    // Second pass: 1-to-N DP Branch and Bound
-    const candidates: Transaction[] = [];
-    for (let j = 0; j < reconciledRecords.length; j++) {
-       if (usedDbIndices.has(j)) continue;
-       const aTime = parseDate(reconciledRecords[j].date);
-       if (Math.abs(bTime - aTime) / DAY_MS <= 14) {
-          candidates.push({ ...reconciledRecords[j], originalIndex: j });
-       }
-    }
-    
-    const match = matchOneToMany(bAmt, bTime, candidates, 60);
-    if (match) {
-       match.matchedIndices.forEach((idx: number) => usedDbIndices.add(idx));
-       return false;
-    }
-    
-    return true; // Keep
-  });
+  return bankRecords.filter((_, i) => !usedBankIndices.has(i));
 }
 
 export type MatchGroup = {
