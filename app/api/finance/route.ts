@@ -424,14 +424,22 @@ export async function POST(request: Request) {
   if (row[0] && row[0].match(/^\d{2}\/\d{2}\/\d{4}$/)) {
     const parts = row[0].split('/');
     const formattedDate = `${parts[2]}/${parts[0]}/${parts[1]}`;
-    const amount = parseFloat(row[2]) || 0;
+    
+    const cleanAmountStr = (row[2] || '').replace(/[$,\s]/g, '');
+    const amount = parseFloat(cleanAmountStr) || 0;
     const isExpense = amount < 0;
     
     let parsedBalance = 0;
-    if (row[3] && !isNaN(parseFloat(row[3]))) {
-      parsedBalance = parseFloat(row[3]);
-    } else if (row[4] && !isNaN(parseFloat(row[4]))) {
-      parsedBalance = parseFloat(row[4]);
+    // Scan remaining columns backwards to find a valid running balance
+    for (let i = row.length - 1; i >= 3; i--) {
+      if (row[i]) {
+        const cleanBalStr = row[i].replace(/[$,\s]/g, '');
+        const val = parseFloat(cleanBalStr);
+        if (!isNaN(val) && val !== amount) {
+          parsedBalance = val;
+          break;
+        }
+      }
     }
 
     return {

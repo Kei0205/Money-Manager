@@ -737,7 +737,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.65</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.66</span>
         </p>
       </header>
 

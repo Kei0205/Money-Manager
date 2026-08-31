@@ -276,14 +276,20 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
             <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>CSV 比較照合エンジン</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.1)', padding: '5px 15px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>🏦 銀行残高確認:</span>
-              <input 
-                type="number" 
-                value={bankBalanceInput} 
-                onChange={e => setBankBalanceInput(e.target.value)}
-                placeholder="現在の銀行残高を入力"
-                className="modal-input"
-                style={{ width: '200px', margin: 0 }}
-              />
+              
+              {csvRecords.some(r => r.balance && r.balance !== 0) ? (
+                <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{formatCurrency(parseFloat(bankBalanceInput))}</span>
+              ) : (
+                <input 
+                  type="number" 
+                  value={bankBalanceInput} 
+                  onChange={e => setBankBalanceInput(e.target.value)}
+                  placeholder="残高を手入力..."
+                  className="modal-input"
+                  style={{ width: '150px', margin: 0 }}
+                />
+              )}
+              
               <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                 → 取引後: <span style={{ color: calculatedBankBalance < 0 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>{formatCurrency(calculatedBankBalance)}</span>
               </span>
