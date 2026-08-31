@@ -247,6 +247,45 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
     }
   }
 
+  // Pass 4: 1-to-1 Fuzzy matches (for tips or foreign exchange differences)
+  for (let i = 0; i < bankRecords.length; i++) {
+    if (matchedBankIndices.has(i)) continue;
+    const b = bankRecords[i];
+    const bAmt = (b.expense || 0) - (b.income || 0);
+    const bTime = parseDate(b.date);
+    
+    let bestMatch = -1;
+    let minScore = Infinity; // We'll score by sum of percent difference and day difference
+    
+    for (let j = 0; j < appRecords.length; j++) {
+      if (matchedAppIndices.has(appRecords[j].originalIndex ?? -1)) continue;
+      const a = appRecords[j];
+      const aAmt = (a.expense || 0) - (a.income || 0);
+      const aTime = parseDate(a.date);
+      
+      const diffAmt = Math.abs(bAmt - aAmt);
+      const percentDiff = diffAmt / Math.max(Math.abs(bAmt), 0.01);
+      const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
+      
+      // Allow up to 20% difference or flat $3.00 (tips/fx), within 3 days
+      if ((percentDiff <= 0.20 || diffAmt <= 3.00) && daysDiff <= 3) {
+        const score = percentDiff * 100 + daysDiff; // lower is better
+        if (score < minScore) {
+          minScore = score;
+          bestMatch = j;
+        }
+      }
+    }
+    if (bestMatch !== -1) {
+      matchedBankIndices.add(i);
+      matchedAppIndices.add(appRecords[bestMatch].originalIndex ?? -1);
+      matchGroups.push({
+        bankIndices: [i],
+        appIndices: [appRecords[bestMatch].originalIndex ?? -1]
+      });
+    }
+  }
+
   return { matchedBankIndices, matchedAppIndices, matchGroups };
 }
 

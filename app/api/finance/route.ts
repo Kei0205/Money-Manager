@@ -426,13 +426,21 @@ export async function POST(request: Request) {
     const formattedDate = `${parts[2]}/${parts[0]}/${parts[1]}`;
     const amount = parseFloat(row[2]) || 0;
     const isExpense = amount < 0;
+    
+    let parsedBalance = 0;
+    if (row[3] && !isNaN(parseFloat(row[3]))) {
+      parsedBalance = parseFloat(row[3]);
+    } else if (row[4] && !isNaN(parseFloat(row[4]))) {
+      parsedBalance = parseFloat(row[4]);
+    }
+
     return {
       date: formattedDate,
       description: row[1] || '',
       category: '',
       expense: isExpense ? Math.abs(amount) : 0,
       income: !isExpense ? amount : 0,
-      balance: 0,
+      balance: parsedBalance,
       month: `${parts[2]}-${parts[0]}`
     };
   } else {

@@ -17,7 +17,10 @@ interface CsvReconcileModalProps {
 
 export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, csvRecords, setCsvRecords }) => {
   const { data, fetchData } = useFinanceContext();
-  const [bankBalanceInput, setBankBalanceInput] = useState<string>('');
+  const [bankBalanceInput, setBankBalanceInput] = useState<string>(() => {
+    const firstWithBalance = csvRecords.find(r => r.balance && r.balance !== 0);
+    return firstWithBalance ? String(firstWithBalance.balance) : '';
+  });
   const [selectedCsvIndices, setSelectedCsvIndices] = useState<Set<number>>(new Set());
   const [selectedAppIndices, setSelectedAppIndices] = useState<Set<number>>(new Set());
   const [matchGroups, setMatchGroups] = useState<MatchGroup[]>([]);
