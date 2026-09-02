@@ -481,14 +481,14 @@ export async function POST(request: Request) {
               }).eq('id', updatedRecord.id);
             } else {
               await supabase.from('transactions').insert({
-                description: updatedRecord.description,
-                date: updatedRecord.date,
-                category: updatedRecord.category,
-                expense: updatedRecord.expense,
-                income: updatedRecord.income,
+                description: updatedRecord.description || '',
+                date: updatedRecord.date || '',
+                category: updatedRecord.category || '',
+                expense: updatedRecord.expense || 0,
+                income: updatedRecord.income || 0,
                 balance: 0,
-                month: updatedRecord.month || updatedRecord.date?.substring(0, 7).replace('/', '-'),
-                recordType: updatedRecord.recordType || 'expense_normal',
+                month: updatedRecord.month || (updatedRecord.date ? updatedRecord.date.substring(0, 7).replace('/', '-') : ''),
+                record_type: updatedRecord.recordType || 'expense_normal',
                 reconciled: true
               });
             }

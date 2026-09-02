@@ -144,7 +144,9 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
   const parsedBank = parseFloat(String(bankBalanceInput));
   const calculatedBankBalance = (isNaN(parsedBank) ? 0 : parsedBank) + Array.from(selectedCsvIndices).reduce((sum, idx) => sum + ((csvRecords[idx]?.expense || 0) - (csvRecords[idx]?.income || 0)), 0);
 
-  const unreconciled = (data?.records || []).filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0));
+  const unreconciled = (data?.records || [])
+    .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
+    .filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0));
 
   const handleReconcile = async (isAdjustment = false) => {
     // Both sides empty = everything is reconciled
@@ -194,10 +196,10 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
          reconciled: true});
     }
 
-    const updates = Array.from(selectedAppIndices).map(idx => {
-       const r = (data?.records || [])[idx];
-       return { ...r, reconciled: true };
-    });
+    const updates = Array.from(selectedAppIndices)
+       .map(idx => (data?.records || [])[idx])
+       .filter(r => r !== undefined)
+       .map(r => ({ ...r, reconciled: true }));
     
     const allUpdates = [...updates, ...newRecords];
     
@@ -215,8 +217,8 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
       if (res.ok) {
          fetchData();
          
-         const justMatchedCsv = Array.from(selectedCsvIndices).map(idx => csvRecords[idx]);
-         const justMatchedApp = Array.from(selectedAppIndices).map(idx => (data?.records || [])[idx]);
+         const justMatchedCsv = Array.from(selectedCsvIndices).map(idx => csvRecords[idx]).filter(Boolean);
+         const justMatchedApp = Array.from(selectedAppIndices).map(idx => (data?.records || [])[idx]).filter(Boolean);
          setRecentlyReconciled(prev => [...prev, { csv: justMatchedCsv, app: justMatchedApp }]);
 
          const remainingCsv = csvRecords.filter((_, idx) => !selectedCsvIndices.has(idx));
