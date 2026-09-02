@@ -196,6 +196,8 @@ export function deduplicateBankRecords(bankRecords: Transaction[], reconciledRec
       const diffCents = Math.abs(toCents(bAmt) - toCents(aAmt));
       if (diffCents === 0) continue; 
       
+      if (Math.sign(bAmt) !== Math.sign(aAmt)) continue; // Prevent income/expense cross-matching
+      
       const isWithin300Cents = diffCents <= 300;
       const isWithin20Percent = diffCents <= Math.abs(toCents(bAmt)) * 0.2;
       
@@ -333,6 +335,8 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
       const aTime = parseDate(a.date);
       
       const diffAmt = Math.abs(bAmt - aAmt);
+      if (Math.sign(bAmt) !== Math.sign(aAmt)) continue; // Prevent income/expense cross-matching
+      
       const percentDiff = diffAmt / Math.max(Math.abs(bAmt), 0.01);
       const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
       

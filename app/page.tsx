@@ -251,38 +251,10 @@ function DashboardContent() {
              return;
           }
 
-          const { matchedBankIndices, matchedAppIndices } = autoReconcile(bankRecords, appRecords);
-          
-          if (matchedAppIndices.size > 0) {
-             const matchedIds = Array.from(matchedAppIndices).map(idx => {
-                const r = (data?.records || [])[idx];
-                return r?.id;
-             }).filter(Boolean);
-
-             const batchRes = await fetch('/api/finance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'batch_reconcile',
-                  payload: {
-                    reconciledIds: matchedIds,
-                    newRecords: []
-                  }
-                })
-             });
-             if (batchRes.ok) {
-                // Update local data to reflect reconciled status
-                await fetchData();
-             }
-          }
-          
-          const unmatchedBankRecords = bankRecords.filter((_: Transaction, idx: number) => !matchedBankIndices.has(idx));
-          if (unmatchedBankRecords.length === 0) {
-             showAlert(`✨ すべてのデータを自動照合しました！（${matchedBankIndices.size}件）`);
-          } else {
-             setCsvRecords(unmatchedBankRecords);
-             setShowCsvModal(true);
-          }
+          // CSVのデータを全てモーダルに渡し、モーダル内で自動マッチ（提案）を行わせる。
+          // 勝手にDBへ保存しない。
+          setCsvRecords(bankRecords);
+          setShowCsvModal(true);
         }
       } catch (err) {
         showAlert('読み込みに失敗しました');

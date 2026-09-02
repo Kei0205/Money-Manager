@@ -142,7 +142,7 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
   }, [matchGroups, selectedCsvIndices, selectedAppIndices, csvRecords, data]);
 
   const parsedBank = parseFloat(String(bankBalanceInput));
-  const calculatedBankBalance = (isNaN(parsedBank) ? 0 : parsedBank) + Array.from(selectedCsvIndices).reduce((sum, idx) => sum + ((csvRecords[idx]?.expense || 0) - (csvRecords[idx]?.income || 0)), 0);
+  const calculatedBankBalance = (isNaN(parsedBank) ? 0 : parsedBank) + Array.from(selectedCsvIndices).reduce((sum, idx) => sum + ((csvRecords[idx]?.income || 0) - (csvRecords[idx]?.expense || 0)), 0);
 
   const unreconciled = (data?.records || [])
     .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
@@ -247,26 +247,7 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
   const isMatch = Math.abs(diff) < 0.01;
 
   const handleClose = async () => {
-    // 閉じる時に、マッチンググループ（AIによる自動マッチや、確定済みのグループ）に
-    // 含まれているアプリデータを自動でDB保存(reconciled: true)する
-    const appUpdateIndices = new Set<number>();
-    matchGroups.forEach(g => {
-      g.appIndices.forEach(idx => appUpdateIndices.add(idx));
-    });
-
-    if (appUpdateIndices.size > 0) {
-      const updates = Array.from(appUpdateIndices).map(idx => {
-         const r = (data?.records || [])[idx];
-         return { ...r, reconciled: true };
-      });
-      // 裏側でサイレントにAPIを叩いて保存
-      fetch('/api/finance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'batch_update', records: updates })
-      }).then(() => fetchData());
-    }
-    
+    // データ保護のため、閉じる時は自動保存せず純粋に閉じるだけにする
     onClose();
   };
 
