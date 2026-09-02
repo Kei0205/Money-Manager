@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
 
-import fs from 'fs/promises';
-import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { createClient } from '@supabase/supabase-js';
 import { Database, Transaction, MonthlySettings, FixedExpense, WishlistItem, AccountBalance } from '../../types';
 
 export const dynamic = 'force-dynamic';
-
-const DB_PATH = path.join(process.cwd(), 'data', 'db.json');
 
 const getSupabase = () => createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -36,22 +32,14 @@ async function readDB() {
   };
 
   try {
-    const data = await fs.readFile(DB_PATH, 'utf-8');
-    const p = JSON.parse(data);
-    if (p.monthlySettings) parsed.monthlySettings = p.monthlySettings;
-    if (p.accounts) parsed.accounts = p.accounts;
-    if (p.categoryBudgets) parsed.categoryBudgets = p.categoryBudgets;
-    if (p.wishlist) parsed.wishlist = p.wishlist;
-    if (p.ignoredBudgetCategories) parsed.ignoredBudgetCategories = p.ignoredBudgetCategories;
-  } catch (error) {
-    console.warn('Local db.json not readable, using fallback for settings:', error);
-  }
-
-  try {
     const supabase = getSupabase();
     
     // Read Settings from Supabase
     const { data: settingsData, error: settingsError } = await supabase.from('transactions').select('*').eq('record_type', 'app_settings').eq('category', 'global_settings');
+    if (settingsError) {
+      console.error('Supabase settings fetch error:', settingsError);
+    }
+    
     if (settingsData && settingsData.length > 0) {
       try {
         const p = JSON.parse(settingsData[0].description);
@@ -86,12 +74,6 @@ async function readDB() {
 
 async function writeDB(data: Database) {
   try {
-    await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn('Could not write local db.json, ignoring.');
-  }
-
-  try {
     const supabase = getSupabase();
     const settingsData = {
       monthlySettings: data.monthlySettings,
@@ -103,10 +85,15 @@ async function writeDB(data: Database) {
 
     const { data: existing, error: selectError } = await supabase.from('transactions').select('id').eq('record_type', 'app_settings').eq('category', 'global_settings');
     
+    if (selectError) {
+      throw new Error(`Select error: ${selectError.message}`);
+    }
+
     if (existing && existing.length > 0) {
-      await supabase.from('transactions').update({ description: JSON.stringify(settingsData) }).eq('id', existing[0].id);
+      const { error: updateError } = await supabase.from('transactions').update({ description: JSON.stringify(settingsData) }).eq('id', existing[0].id);
+      if (updateError) throw new Error(`Update error: ${updateError.message}`);
     } else {
-      await supabase.from('transactions').insert({
+      const { error: insertError } = await supabase.from('transactions').insert({
         record_type: 'app_settings',
         category: 'global_settings',
         description: JSON.stringify(settingsData),
@@ -116,9 +103,11 @@ async function writeDB(data: Database) {
         income: 0,
         reconciled: false
       });
+      if (insertError) throw new Error(`Insert error: ${insertError.message}`);
     }
   } catch (e) {
     console.error('Failed to write settings to Supabase', e);
+    throw e;
   }
 }
 
@@ -474,13 +463,14 @@ export async function POST(request: Request) {
         if (records && Array.isArray(records)) {
           for (const updatedRecord of records) {
             if (updatedRecord.id) {
-              await supabase.from('transactions').update({
+              const { error } = await supabase.from('transactions').update({
                 category: updatedRecord.category,
                 description: updatedRecord.description,
                 reconciled: true
               }).eq('id', updatedRecord.id);
+              if (error) throw new Error(`Batch update error (id: ${updatedRecord.id}): ${error.message}`);
             } else {
-              await supabase.from('transactions').insert({
+              const { error } = await supabase.from('transactions').insert({
                 description: updatedRecord.description || '',
                 date: updatedRecord.date || '',
                 category: updatedRecord.category || '',
@@ -491,6 +481,7 @@ export async function POST(request: Request) {
                 record_type: updatedRecord.recordType || 'expense_normal',
                 reconciled: true
               });
+              if (error) throw new Error(`Batch insert error: ${error.message}`);
             }
           }
         }
@@ -501,7 +492,8 @@ export async function POST(request: Request) {
           
           if (idsToUpdate.length > 0) {
             // Batch update all matched records to reconciled: true
-            await supabase.from('transactions').update({ reconciled: true }).in('id', idsToUpdate);
+            const { error } = await supabase.from('transactions').update({ reconciled: true }).in('id', idsToUpdate);
+            if (error) throw new Error(`Batch reconcile update error: ${error.message}`);
           }
         }
 
@@ -512,11 +504,13 @@ export async function POST(request: Request) {
             category: r.category || '',
             expense: r.expense || 0,
             income: r.income || 0,
-            month: r.month || '',
+            balance: 0,
+            month: r.month || (r.date ? r.date.substring(0, 7).replace('/', '-') : ''),
             record_type: r.recordType || 'expense_normal',
             reconciled: true
           }));
-          await supabase.from('transactions').insert(inserts);
+          const { error } = await supabase.from('transactions').insert(inserts);
+          if (error) throw new Error(`Batch reconcile insert error: ${error.message}`);
         }
       }
 
