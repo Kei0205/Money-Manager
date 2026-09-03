@@ -133,20 +133,16 @@ export const FixedExpensesModal: React.FC<FixedExpensesModalProps> = ({
 
   const handleSaveAllMonthlySettings = async () => {
     try {
-      for (const month of Object.keys(tempSettings)) {
-        await fetch('/api/finance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            action: 'update_monthly_settings', 
-            payload: { 
-              month: month, 
-              fixedExpenses: tempSettings[month].fixedExpenses, 
-              savingsGoal: tempSettings[month].savingsGoal 
-            } 
-          })
-        });
-      }
+      await fetch('/api/finance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'batch_update_monthly_settings', 
+          payload: { 
+            settings: tempSettings
+          } 
+        })
+      });
       onClose();
       fetchData();
     } catch (err) {

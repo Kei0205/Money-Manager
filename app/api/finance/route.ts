@@ -603,6 +603,20 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true, message: '旅行の精算が完了しました。' });
 
+    } else if (body.action === 'batch_update_monthly_settings') {
+      const { settings } = body.payload; // settings is a record of month -> { fixedExpenses, savingsGoal }
+      if (settings && typeof settings === 'object') {
+        for (const [month, data] of Object.entries(settings)) {
+          const typedData = data as { fixedExpenses: FixedExpense[], savingsGoal: number | string };
+          db.monthlySettings[month] = {
+            fixedExpenses: typedData.fixedExpenses,
+            savingsGoal: parseFloat(String(typedData.savingsGoal)) || 0
+          };
+        }
+        await writeDB(db);
+      }
+      return NextResponse.json({ success: true, message: '一括更新しました。' });
+      
     } else if (body.action === 'update_monthly_settings') {
       const { month, fixedExpenses, savingsGoal } = body.payload;
       db.monthlySettings[month] = {
