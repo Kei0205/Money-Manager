@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppData, MonthlySettings, WishlistItem } from '../types';
 
 export const useFinanceData = () => {
@@ -204,7 +204,7 @@ export const useFinanceData = () => {
     });
   };
 
-  return {
+  return useMemo(() => ({
     data,
     loading,
     error,
@@ -224,5 +224,7 @@ export const useFinanceData = () => {
     executeAutoCover,
     exportData,
     importData
-  };
+  }), [
+    data, loading, error, monthlySettings, localWishlist, ignoredBudgetCategories, fetchData
+  ]);
 };

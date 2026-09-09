@@ -32,12 +32,16 @@ export const findSubsetSum = (
     .sort((a, b) => Math.abs(b.cents) - Math.abs(a.cents));
 
   const results: Transaction[][] = [];
+  let iterations = 0;
+  const MAX_ITERATIONS = 10000;
 
   const backtrack = (
     startIndex: number,
     currentSum: number,
     currentCombination: Transaction[]
   ) => {
+    if (iterations++ > MAX_ITERATIONS) return;
+
     // 成功条件
     if (currentSum === targetCents) {
       results.push([...currentCombination]);
@@ -49,6 +53,7 @@ export const findSubsetSum = (
     }
 
     for (let i = startIndex; i < sortedCandidates.length; i++) {
+      if (iterations > MAX_ITERATIONS) break;
       const candidate = sortedCandidates[i];
       // Check sign (prevent mixing income and expenses in the same combination)
       if (Math.sign(candidate.cents) !== Math.sign(targetCents)) continue;
@@ -102,25 +107,38 @@ export function deduplicateBankRecords(bankRecords: Transaction[], reconciledRec
   const parseDate = (dstr: string) => new Date(dstr).getTime();
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  // Pass 1: 1-to-1 strict exact match
+  // Pass 1: 1-to-1 strict exact match (including cross-sign: bank debit ↔ app income)
   for (let i = 0; i < bankRecords.length; i++) {
      if (usedBankIndices.has(i)) continue;
      const b = bankRecords[i];
      const bAmt = (b.expense || 0) - (b.income || 0);
+     const bAbsAmt = Math.abs(bAmt);
      const bTime = parseDate(b.date);
      
      let bestMatch = -1;
      let minDiff = Infinity;
+     let bestIsCrossSign = false;
      for (let j = 0; j < reconciledRecords.length; j++) {
         if (usedDbIndices.has(j)) continue;
         const a = reconciledRecords[j];
         const aAmt = (a.expense || 0) - (a.income || 0);
+        const aAbsAmt = Math.abs(aAmt);
         const aTime = parseDate(a.date);
-        if (Math.abs(bAmt - aAmt) < 0.01) {
-           const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
-           if (daysDiff <= 3 && daysDiff < minDiff) { 
-              minDiff = daysDiff;
-              bestMatch = j;
+        const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
+        if (daysDiff > 3) continue;
+        
+        // Same-sign exact match
+        if (Math.abs(bAmt - aAmt) < 0.01 && daysDiff < minDiff) {
+           minDiff = daysDiff;
+           bestMatch = j;
+           bestIsCrossSign = false;
+        }
+        // Cross-sign match (bank debit ↔ app income)
+        else if (Math.sign(bAmt) !== Math.sign(aAmt) && Math.abs(bAbsAmt - aAbsAmt) < 0.01 && daysDiff < minDiff) {
+           if (bestMatch === -1 || bestIsCrossSign) {
+             minDiff = daysDiff;
+             bestMatch = j;
+             bestIsCrossSign = true;
            }
         }
      }
@@ -177,11 +195,12 @@ export function deduplicateBankRecords(bankRecords: Transaction[], reconciledRec
      }
   }
 
-  // Pass 4: Fuzzy 1-to-1 (Optional for deduplication)
+  // Pass 4: Fuzzy 1-to-1 (including cross-sign for deduplication)
   for (let i = 0; i < bankRecords.length; i++) {
     if (usedBankIndices.has(i)) continue;
     const b = bankRecords[i];
     const bAmt = (b.expense || 0) - (b.income || 0);
+    const bAbsCents = Math.abs(toCents(bAmt));
     const bTime = parseDate(b.date);
     
     let bestMatch = -1;
@@ -191,15 +210,15 @@ export function deduplicateBankRecords(bankRecords: Transaction[], reconciledRec
       if (usedDbIndices.has(j)) continue;
       const a = reconciledRecords[j];
       const aAmt = (a.expense || 0) - (a.income || 0);
+      const aAbsCents = Math.abs(toCents(aAmt));
       const aTime = parseDate(a.date);
       
-      const diffCents = Math.abs(toCents(bAmt) - toCents(aAmt));
-      if (diffCents === 0) continue; 
-      
-      if (Math.sign(bAmt) !== Math.sign(aAmt)) continue; // Prevent income/expense cross-matching
+      // Compare absolute amounts (supports cross-sign)
+      const diffCents = Math.abs(bAbsCents - aAbsCents);
+      if (diffCents === 0) continue; // exact matches handled in Pass 1
       
       const isWithin300Cents = diffCents <= 300;
-      const isWithin20Percent = diffCents <= Math.abs(toCents(bAmt)) * 0.2;
+      const isWithin20Percent = diffCents <= bAbsCents * 0.2;
       
       if (isWithin300Cents || isWithin20Percent) {
         const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
@@ -230,37 +249,56 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
   const parseDate = (dstr: string) => new Date(dstr).getTime();
   const DAY_MS = 24 * 60 * 60 * 1000;
   
-  // Pass 1: 1-to-1 exact matches
+  // Pass 1: 1-to-1 exact matches (including cross-sign: bank debit ↔ app income)
   for (let i = 0; i < bankRecords.length; i++) {
     if (matchedBankIndices.has(i)) continue;
     const b = bankRecords[i];
     const bAmt = (b.expense || 0) - (b.income || 0);
+    const bAbsAmt = Math.abs(bAmt);
     const bTime = parseDate(b.date);
     
     let bestMatch = -1;
     let minDiff = Infinity;
+    let bestIsCrossSign = false;
     
     for (let j = 0; j < appRecords.length; j++) {
-      if (matchedAppIndices.has(appRecords[j].originalIndex ?? -1)) continue;
+      const origIdx = appRecords[j].originalIndex;
+      if (origIdx == null || matchedAppIndices.has(origIdx)) continue;
       const a = appRecords[j];
       const aAmt = (a.expense || 0) - (a.income || 0);
+      const aAbsAmt = Math.abs(aAmt);
       const aTime = parseDate(a.date);
       
-      if (Math.abs(bAmt - aAmt) < 0.01) {
-        const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
-        if (daysDiff <= 3 && daysDiff < minDiff) { // strict 3 days
+      const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
+      if (daysDiff > 3) continue;
+
+      // Same-sign exact match (normal case)
+      if (Math.abs(bAmt - aAmt) < 0.01 && daysDiff < minDiff) {
+        minDiff = daysDiff;
+        bestMatch = j;
+        bestIsCrossSign = false;
+      }
+      // Cross-sign match: bank debit ↔ app income (e.g. Zelle payment matching advance_recovery)
+      // Only match if absolute amounts are equal
+      else if (Math.sign(bAmt) !== Math.sign(aAmt) && Math.abs(bAbsAmt - aAbsAmt) < 0.01 && daysDiff < minDiff) {
+        // Prefer same-sign matches, so only use cross-sign if no same-sign found
+        if (bestMatch === -1 || bestIsCrossSign) {
           minDiff = daysDiff;
           bestMatch = j;
+          bestIsCrossSign = true;
         }
       }
     }
     if (bestMatch !== -1) {
       matchedBankIndices.add(i);
-      matchedAppIndices.add(appRecords[bestMatch].originalIndex ?? -1);
-      matchGroups.push({
-        bankIndices: [i],
-        appIndices: [appRecords[bestMatch].originalIndex ?? -1]
-      });
+      const bestOrigIdx = appRecords[bestMatch].originalIndex;
+      if (bestOrigIdx != null) {
+        matchedAppIndices.add(bestOrigIdx);
+        matchGroups.push({
+          bankIndices: [i],
+          appIndices: [bestOrigIdx]
+        });
+      }
     }
   }
 
@@ -273,21 +311,26 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
     
     const candidates: Transaction[] = [];
     for (let j = 0; j < appRecords.length; j++) {
-       if (matchedAppIndices.has(appRecords[j].originalIndex ?? -1)) continue;
-       const aTime = parseDate(appRecords[j].date);
-       if (Math.abs(bTime - aTime) / DAY_MS <= 14) {
-         candidates.push(appRecords[j]);
-       }
+      const origIdx = appRecords[j].originalIndex;
+      if (origIdx == null || matchedAppIndices.has(origIdx)) continue;
+      const a = appRecords[j];
+      const aTime = parseDate(a.date);
+      if (Math.abs(bTime - aTime) / DAY_MS <= 14) {
+        candidates.push(a);
+      }
     }
     
-    const match = matchOneToMany(bAmt, bTime, candidates, 60);
-    if (match) {
-       matchedBankIndices.add(i);
-       match.matchedIndices.forEach((idx: number) => matchedAppIndices.add(idx));
-       matchGroups.push({
-         bankIndices: [i],
-         appIndices: match.matchedIndices
-       });
+    if (candidates.length > 0) {
+      const match = matchOneToMany(bAmt, bTime, candidates);
+      if (match) {
+        matchedBankIndices.add(i);
+        const validMatchedIndices = match.matchedIndices.filter(idx => idx != null && idx !== -1);
+        validMatchedIndices.forEach(idx => matchedAppIndices.add(idx));
+        matchGroups.push({
+          bankIndices: [i],
+          appIndices: validMatchedIndices
+        });
+      }
     }
   }
   
@@ -319,30 +362,37 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
   }
 
   // Pass 4: 1-to-1 Fuzzy matches (for tips or foreign exchange differences)
+  // Also supports cross-sign matching (bank debit ↔ app income)
   for (let i = 0; i < bankRecords.length; i++) {
     if (matchedBankIndices.has(i)) continue;
     const b = bankRecords[i];
     const bAmt = (b.expense || 0) - (b.income || 0);
+    const bAbsAmt = Math.abs(bAmt);
     const bTime = parseDate(b.date);
     
     let bestMatch = -1;
     let minScore = Infinity; // We'll score by sum of percent difference and day difference
     
     for (let j = 0; j < appRecords.length; j++) {
-      if (matchedAppIndices.has(appRecords[j].originalIndex ?? -1)) continue;
+      const origIdx = appRecords[j].originalIndex;
+      if (origIdx == null || matchedAppIndices.has(origIdx)) continue;
       const a = appRecords[j];
       const aAmt = (a.expense || 0) - (a.income || 0);
+      const aAbsAmt = Math.abs(aAmt);
       const aTime = parseDate(a.date);
       
-      const diffAmt = Math.abs(bAmt - aAmt);
-      if (Math.sign(bAmt) !== Math.sign(aAmt)) continue; // Prevent income/expense cross-matching
+      // Compare absolute amounts for both same-sign and cross-sign
+      const diffAmt = Math.abs(bAbsAmt - aAbsAmt);
+      const isCrossSign = Math.sign(bAmt) !== Math.sign(aAmt);
       
-      const percentDiff = diffAmt / Math.max(Math.abs(bAmt), 0.01);
+      const percentDiff = diffAmt / Math.max(bAbsAmt, 0.01);
       const daysDiff = Math.abs(bTime - aTime) / DAY_MS;
       
       // Allow up to 20% difference or flat $3.00 (tips/fx), within 3 days
       if ((percentDiff <= 0.20 || diffAmt <= 3.00) && daysDiff <= 3) {
-        const score = percentDiff * 100 + daysDiff; // lower is better
+        // Cross-sign matches get a small penalty to prefer same-sign
+        const crossPenalty = isCrossSign ? 5 : 0;
+        const score = percentDiff * 100 + daysDiff + crossPenalty; // lower is better
         if (score < minScore) {
           minScore = score;
           bestMatch = j;
@@ -351,11 +401,14 @@ export function autoReconcile(bankRecords: Transaction[], appRecords: Transactio
     }
     if (bestMatch !== -1) {
       matchedBankIndices.add(i);
-      matchedAppIndices.add(appRecords[bestMatch].originalIndex ?? -1);
-      matchGroups.push({
-        bankIndices: [i],
-        appIndices: [appRecords[bestMatch].originalIndex ?? -1]
-      });
+      const bestOrigIdx = appRecords[bestMatch].originalIndex;
+      if (bestOrigIdx != null) {
+        matchedAppIndices.add(bestOrigIdx);
+        matchGroups.push({
+          bankIndices: [i],
+          appIndices: [bestOrigIdx]
+        });
+      }
     }
   }
 

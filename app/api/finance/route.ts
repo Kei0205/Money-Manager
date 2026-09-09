@@ -136,11 +136,21 @@ export async function GET(req: Request) {
         const month = row.month || '不明';
         const recordType = row.recordType || 'expense_normal';
 
-        totalIncome += income;
-        totalExpense += expense;
+        totalIncome = Math.round((totalIncome + income) * 100) / 100;
+        totalExpense = Math.round((totalExpense + expense) * 100) / 100;
         
-        if (recordType === 'advance_payment') unrecoveredAdvance += expense;
-        if (recordType === 'advance_recovery') unrecoveredAdvance -= income;
+        if (recordType === 'advance_payment') {
+          const desc = row.description || '';
+          if (!desc.includes('（回収済）')) {
+            const match = desc.match(/（一部回収:?\s*([0-9.]+)）/);
+            if (match) {
+              const recoveredAmount = parseFloat(match[1]) || 0;
+              unrecoveredAdvance += Math.max(0, expense - recoveredAmount);
+            } else {
+              unrecoveredAdvance += expense;
+            }
+          }
+        }
 
         if (recordType === 'trip_sandbox') unsettledSandbox += expense;
 
@@ -168,7 +178,7 @@ export async function GET(req: Request) {
       });
     }
 
-    currentBalance = totalIncome - totalExpense;
+    currentBalance = Math.round((totalIncome - totalExpense) * 100) / 100;
 
     const expenseData = Object.keys(expensesByCategory).map(key => ({
       name: key,
@@ -476,7 +486,6 @@ export async function POST(request: Request) {
                 category: updatedRecord.category || '',
                 expense: updatedRecord.expense || 0,
                 income: updatedRecord.income || 0,
-                balance: 0,
                 month: updatedRecord.month || (updatedRecord.date ? updatedRecord.date.substring(0, 7).replace('/', '-') : ''),
                 record_type: updatedRecord.recordType || 'expense_normal',
                 reconciled: true
@@ -504,7 +513,6 @@ export async function POST(request: Request) {
             category: r.category || '',
             expense: r.expense || 0,
             income: r.income || 0,
-            balance: 0,
             month: r.month || (r.date ? r.date.substring(0, 7).replace('/', '-') : ''),
             record_type: r.recordType || 'expense_normal',
             reconciled: true

@@ -32,14 +32,30 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
   const aiGroupsRef = useRef<MatchGroup[]>([]);
 
   const autoReconcileBtn = React.useCallback(() => {
-    if (!data?.records || data.records.length === 0 || csvRecords.length === 0) return;
+    if (!data?.records || csvRecords.length === 0) return;
     
     const unreconciledAppRecords = data.records
       .map((r, i) => ({ ...r, originalIndex: i }))
       .filter((r) => !r.reconciled && (r.expense > 0 || r.income > 0));
       
     const res = autoReconcile(csvRecords, unreconciledAppRecords);
-    setSelectedCsvIndices(res.matchedBankIndices);
+    
+    // If there are unmatched CSV records and no more app records to match against,
+    // auto-select all unmatched CSV records so user can easily use "CSVから新規登録"
+    const finalCsvSet = new Set(res.matchedBankIndices);
+    const unmatchedCsvCount = csvRecords.length - finalCsvSet.size;
+    const unmatchedAppCount = unreconciledAppRecords.length - res.matchedAppIndices.size;
+    
+    if (unmatchedCsvCount > 0 && unmatchedAppCount === 0) {
+      // Auto-select all unmatched CSV records
+      for (let i = 0; i < csvRecords.length; i++) {
+        if (!finalCsvSet.has(i)) {
+          finalCsvSet.add(i);
+        }
+      }
+    }
+    
+    setSelectedCsvIndices(finalCsvSet);
     setSelectedAppIndices(res.matchedAppIndices);
     setMatchGroups(res.matchGroups);
     aiGroupsRef.current = res.matchGroups; // AIグループを保存
@@ -102,36 +118,45 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
     recomputeGroups(selectedCsvIndices, newSet);
   };
 
-  // --- 線の描画（matchGroupsのみ。手動の全対全はやらない）---
-  const updateLines = () => {
-    if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const newLines: { x1: number, y1: number, x2: number, y2: number, color: string }[] = [];
+  const updateLinesRef = useRef<number | null>(null);
 
-    matchGroups.forEach((group, groupIdx) => {
-      const color = MATCH_COLORS[groupIdx % MATCH_COLORS.length];
-      
-      group.bankIndices.forEach(bIdx => {
-        const leftRow = containerRef.current?.querySelector(`tr[data-csv-index="${bIdx}"]`);
-        if (!leftRow) return;
-        const leftRect = leftRow.getBoundingClientRect();
+  const updateLines = () => {
+    if (updateLinesRef.current !== null) return;
+    
+    updateLinesRef.current = requestAnimationFrame(() => {
+      if (!containerRef.current) {
+        updateLinesRef.current = null;
+        return;
+      }
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newLines: { x1: number, y1: number, x2: number, y2: number, color: string }[] = [];
+
+      matchGroups.forEach((group, groupIdx) => {
+        const color = MATCH_COLORS[groupIdx % MATCH_COLORS.length];
         
-        group.appIndices.forEach(aIdx => {
-          const rightRow = containerRef.current?.querySelector(`tr[data-app-index="${aIdx}"]`);
-          if (!rightRow) return;
-          const rightRect = rightRow.getBoundingClientRect();
+        group.bankIndices.forEach(bIdx => {
+          const leftRow = containerRef.current?.querySelector(`tr[data-csv-index="${bIdx}"]`);
+          if (!leftRow) return;
+          const leftRect = leftRow.getBoundingClientRect();
           
-          const y1 = leftRect.top + leftRect.height / 2 - containerRect.top;
-          const y2 = rightRect.top + rightRect.height / 2 - containerRect.top;
-          const x1 = leftRect.right - containerRect.left;
-          const x2 = rightRect.left - containerRect.left;
-          
-          newLines.push({ x1, y1, x2, y2, color });
+          group.appIndices.forEach(aIdx => {
+            const rightRow = containerRef.current?.querySelector(`tr[data-app-index="${aIdx}"]`);
+            if (!rightRow) return;
+            const rightRect = rightRow.getBoundingClientRect();
+            
+            const y1 = leftRect.top + leftRect.height / 2 - containerRect.top;
+            const y2 = rightRect.top + rightRect.height / 2 - containerRect.top;
+            const x1 = leftRect.right - containerRect.left;
+            const x2 = rightRect.left - containerRect.left;
+            
+            newLines.push({ x1, y1, x2, y2, color });
+          });
         });
       });
-    });
 
-    setLines(newLines);
+      setLines(newLines);
+      updateLinesRef.current = null;
+    });
   };
 
   useLayoutEffect(() => {
@@ -148,7 +173,7 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
     .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
     .filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0));
 
-  const handleReconcile = async (isAdjustment = false) => {
+  const handleReconcile = async (mode: 'exact' | 'new' | 'adjust' | 'overwrite' | 'force') => {
     // Both sides empty = everything is reconciled
     if (csvRecords.length === 0 && unreconciled.length === 0) {
       (typeof window !== "undefined" && (window as any).showAlert || window.alert)('✨ すべてのデータが照合済みです！');
@@ -168,17 +193,24 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
     const diff = Math.round((csvTotal - appTotal) * 100) / 100;
     
     let newRecords: Transaction[] = [];
-    if (!isAdjustment && selectedCsvIndices.size > 0 && selectedAppIndices.size === 0) {
+    let updates = Array.from(selectedAppIndices)
+       .map(idx => (data?.records || [])[idx])
+       .filter(r => r !== undefined)
+       .map(r => ({ ...r, reconciled: true }));
+
+    if (mode === 'new') {
        newRecords = Array.from(selectedCsvIndices).map(idx => {
           const r = csvRecords[idx];
+          const isIncome = (r.income || 0) > 0 && (r.expense || 0) === 0;
           return {
             ...r,
+            category: r.category || (isIncome ? '入金' : 'その他'),
             month: r.month || r.date.substring(0, 7).replace('/', '-'),
-            recordType: 'expense_normal',
+            recordType: isIncome ? 'income_special' : 'expense_normal',
             reconciled: true
           };
        });
-    } else if (isAdjustment && diff !== 0) {
+    } else if (mode === 'adjust' && diff !== 0) {
        const cat = window.prompt("差額分のカテゴリ名を入力してください (例: その他, 手数料, 照合調整金)", "その他");
        if (!cat) return;
        const today = new Date();
@@ -194,12 +226,14 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
          month: todayStr.substring(0, 7).replace('/', '-'),
          recordType: 'expense_normal' as RecordType,
          reconciled: true});
+    } else if (mode === 'overwrite' && diff !== 0 && updates.length > 0) {
+       const target = updates[0];
+       if (target.expense > 0 || (target.expense === 0 && target.income === 0 && diff > 0)) {
+         target.expense = Math.round((target.expense + diff) * 100) / 100;
+       } else if (target.income > 0) {
+         target.income = Math.round((target.income - diff) * 100) / 100;
+       }
     }
-
-    const updates = Array.from(selectedAppIndices)
-       .map(idx => (data?.records || [])[idx])
-       .filter(r => r !== undefined)
-       .map(r => ({ ...r, reconciled: true }));
     
     const allUpdates = [...updates, ...newRecords];
     
@@ -218,7 +252,13 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
          fetchData();
          
          const justMatchedCsv = Array.from(selectedCsvIndices).map(idx => csvRecords[idx]).filter(Boolean);
-         const justMatchedApp = Array.from(selectedAppIndices).map(idx => (data?.records || [])[idx]).filter(Boolean);
+         let justMatchedApp = Array.from(selectedAppIndices).map(idx => (data?.records || [])[idx]).filter(Boolean);
+         
+         // Add newly created records to the UI so it doesn't say 'なし'
+         if (newRecords.length > 0) {
+            justMatchedApp = [...justMatchedApp, ...newRecords];
+         }
+         
          setRecentlyReconciled(prev => [...prev, { csv: justMatchedCsv, app: justMatchedApp }]);
 
          const remainingCsv = csvRecords.filter((_, idx) => !selectedCsvIndices.has(idx));
@@ -398,11 +438,21 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
           </div>
           <div style={{ display: 'flex', gap: '15px' }}>
              {isMatch ? (
-               <button className="action-button primary" onClick={() => handleReconcile(false)}>✅ 照合確定</button>
+               <button className="action-button primary" onClick={() => handleReconcile('exact')}>✅ 照合確定</button>
              ) : (
                <>
-                 <button className="action-button" style={{ background: '#3b82f6', border: 'none', color: '#fff' }} onClick={() => handleReconcile(false)}>📥 CSVから新規登録</button>
-                 <button className="action-button secondary" onClick={() => handleReconcile(true)}>⚖️ 差額を自動作成して照合</button>
+                 {selectedCsvIndices.size > 0 && selectedAppIndices.size === 0 && (
+                   <button className="action-button" style={{ background: '#3b82f6', border: 'none', color: '#fff' }} onClick={() => handleReconcile('new')}>📥 CSVから新規登録</button>
+                 )}
+                 {selectedAppIndices.size > 0 && selectedCsvIndices.size === 0 && (
+                   <button className="action-button secondary" onClick={() => handleReconcile('force')}>⚖️ 強制的に照合済みにする</button>
+                 )}
+                 {selectedCsvIndices.size > 0 && selectedAppIndices.size > 0 && (
+                   <>
+                     <button className="action-button" style={{ background: '#f59e0b', border: 'none', color: '#fff' }} onClick={() => handleReconcile('overwrite')}>✏️ アプリ側をCSVの金額に修正して照合</button>
+                     <button className="action-button secondary" onClick={() => handleReconcile('adjust')}>⚖️ 差額を自動作成して照合</button>
+                   </>
+                 )}
                </>
              )}
           </div>

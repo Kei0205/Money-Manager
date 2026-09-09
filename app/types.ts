@@ -30,7 +30,7 @@ export interface Transaction {
 export interface FixedExpense {
   id: string;
   name: string;
-  amount: number | string;
+  amount: number;
 }
 
 export interface MonthlySettings {
