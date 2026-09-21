@@ -155,7 +155,7 @@ function DashboardContent() {
 
   // Recent Activity Edit State
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
-  const [editFormData, setEditFormData] = useState({ date: '', category: '', description: '', amount: '', isIncome: false });
+  const [editFormData, setEditFormData] = useState<{ date: string, category: string, description: string, amount: string, isIncome: boolean, recordType: RecordType }>({ date: '', category: '', description: '', amount: '', isIncome: false, recordType: 'expense_normal' });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmRecoveryId, setConfirmRecoveryId] = useState<string | null>(null);
 
@@ -439,7 +439,8 @@ function DashboardContent() {
         category: editFormData.category,
         description: editFormData.description,
         expense: editFormData.isIncome ? 0 : parseFloat(editFormData.amount),
-        income: editFormData.isIncome ? parseFloat(editFormData.amount) : 0
+        income: editFormData.isIncome ? parseFloat(editFormData.amount) : 0,
+        recordType: editFormData.recordType
       };
       await editRecord(editingRecordId, payload);
       showAlert('編集内容を保存しました！');
@@ -511,7 +512,8 @@ function DashboardContent() {
         category: record.category,
         description: record.description || '',
         amount: String(record.expense > 0 ? record.expense : record.income),
-        isIncome: record.income > 0
+        isIncome: record.income > 0,
+        recordType: record.recordType
       });
     }
   };
@@ -1062,9 +1064,21 @@ ${futureSettings}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <label style={{ flex: 1 }}>
                   種類
-                  <select value={editFormData.isIncome ? "income" : "expense"} onChange={e => setEditFormData({...editFormData, isIncome: e.target.value === 'income'})}>
-                    <option value="expense">支出</option>
-                    <option value="income">収入</option>
+                  <select 
+                    value={editFormData.recordType} 
+                    onChange={e => {
+                      const val = e.target.value as RecordType;
+                      const isIncome = val === 'income_allowance' || val === 'income_normal' || val === 'income_special' || val === 'advance_recovery' || val === 'refund';
+                      setEditFormData({...editFormData, recordType: val, isIncome});
+                    }}
+                  >
+                    <option value="expense_normal">💸 通常の支出</option>
+                    <option value="trip_sandbox">🎒 旅行積立へ移動</option>
+                    <option value="advance_payment">🤝 友人の立替</option>
+                    <option value="refund">↩️ 返金・キャンセル</option>
+                    <option value="income_allowance">💰 入金（通常・仕送り）</option>
+                    <option value="income_special">💰 入金（特別資産・臨時）</option>
+                    <option value="advance_recovery">🤝 入金（立替の回収）</option>
                   </select>
                 </label>
                 <label style={{ flex: 1 }}>
