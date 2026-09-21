@@ -118,8 +118,8 @@ function DashboardContent() {
   const recentTransactions = React.useMemo(() => {
     return [...(data?.records || [])]
       .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10);
-  }, [data?.records]);
+      .slice(0, displayedTransactionCount);
+  }, [data?.records, displayedTransactionCount]);
   // Modals
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean; message: string; title?: string }>({ isOpen: false, message: '' });
@@ -158,6 +158,7 @@ function DashboardContent() {
   const [editFormData, setEditFormData] = useState<{ date: string, category: string, description: string, amount: string, isIncome: boolean, recordType: RecordType }>({ date: '', category: '', description: '', amount: '', isIncome: false, recordType: 'expense_normal' });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmRecoveryId, setConfirmRecoveryId] = useState<string | null>(null);
+  const [displayedTransactionCount, setDisplayedTransactionCount] = useState(10);
 
   // New Engine State
   const [showOffsetModal, setShowOffsetModal] = useState(false);
@@ -716,7 +717,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.70</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.71</span>
         </p>
       </header>
 
@@ -946,7 +947,7 @@ ${futureSettings}
       {/* Recent Activity Panel */}
       {data?.records && data.records.length > 0 && (
         <section className="glass-card" style={{ marginTop: '2rem' }}>
-          <h2 className="chart-title">🕒 Recent Activity (直近10件)</h2>
+          <h2 className="chart-title">🕒 Recent Activity (直近{recentTransactions.length}件)</h2>
           <div style={{ overflowX: 'auto' }}>
             <table className="recent-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
               <thead>
@@ -1042,6 +1043,18 @@ ${futureSettings}
               </tbody>
             </table>
           </div>
+          {data?.records && displayedTransactionCount < data.records.length && (
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button 
+                onClick={() => setDisplayedTransactionCount(prev => prev + 50)}
+                style={{ padding: '0.5rem 1rem', background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s', width: '100%', maxWidth: '300px' }}
+                onMouseOver={e => e.currentTarget.style.background = '#e2e8f0'}
+                onMouseOut={e => e.currentTarget.style.background = '#f1f5f9'}
+              >
+                もっと遡る（さらに50件表示）
+              </button>
+            </div>
+          )}
         </section>
       )}
 
