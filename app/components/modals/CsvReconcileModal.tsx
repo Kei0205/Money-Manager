@@ -25,6 +25,9 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
   const [selectedAppIndices, setSelectedAppIndices] = useState<Set<number>>(new Set());
   const [matchGroups, setMatchGroups] = useState<MatchGroup[]>([]);
   const [recentlyReconciled, setRecentlyReconciled] = useState<{csv: Transaction[], app: Transaction[]}[]>([]);
+  const [editingCsvIndex, setEditingCsvIndex] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<{ description: string, category: string, recordType: RecordType }>({ description: '', category: '', recordType: 'expense_normal' });
+  const uniqueCategories = Array.from(new Set(data?.records?.map(r => r.category).filter(Boolean) || []));
   const containerRef = useRef<HTMLDivElement>(null);
   const [lines, setLines] = useState<{ x1: number, y1: number, x2: number, y2: number, color: string }[]>([]);
   
@@ -173,6 +176,13 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
     .map((r: Transaction, i: number) => ({ ...r, originalIndex: i }))
     .filter((r: Transaction) => !r.reconciled && (r.expense > 0 || r.income > 0));
 
+  const handleCsvEditSave = (index: number) => {
+    const updated = [...csvRecords];
+    updated[index] = { ...updated[index], description: editForm.description, category: editForm.category, recordType: editForm.recordType };
+    setCsvRecords(updated);
+    setEditingCsvIndex(null);
+  };
+
   const handleReconcile = async (mode: 'exact' | 'new' | 'adjust' | 'overwrite' | 'force') => {
     // Both sides empty = everything is reconciled
     if (csvRecords.length === 0 && unreconciled.length === 0) {
@@ -206,7 +216,7 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
             ...r,
             category: r.category || (isIncome ? '入金' : 'その他'),
             month: r.month || r.date.substring(0, 7).replace('/', '-'),
-            recordType: isIncome ? 'income_special' : 'expense_normal',
+            recordType: r.recordType || (isIncome ? 'income_special' : 'expense_normal'),
             reconciled: true
           };
        });
@@ -350,27 +360,97 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
                     <th style={{ padding: '8px' }}>摘要</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>出金</th>
                     <th style={{ padding: '8px', textAlign: 'right' }}>入金</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {csvRecords.length === 0 && <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>データがありません</td></tr>}
+                  {csvRecords.length === 0 && <tr><td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>データがありません</td></tr>}
                   {csvRecords.map((r, i) => {
                     const isSelected = selectedCsvIndices.has(i);
                     const groupIdx = matchGroups.findIndex(g => g.bankIndices.includes(i));
                     const groupColor = groupIdx !== -1 ? MATCH_COLORS[groupIdx % MATCH_COLORS.length] : null;
                     
                     return (
-                      <tr key={i} data-csv-index={i} onClick={() => handleCsvClick(i)} style={{ 
-                        cursor: 'pointer', 
+                      <tr key={i} data-csv-index={i} onClick={() => {
+                        if (editingCsvIndex === i) return;
+                        handleCsvClick(i);
+                      }} style={{ 
+                        cursor: editingCsvIndex === i ? 'default' : 'pointer', 
                         background: groupColor ? `${groupColor}22` : (isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent'),
                         borderLeft: groupColor ? `4px solid ${groupColor}` : 'none',
                         borderBottom: '1px solid rgba(0,0,0,0.05)'
                       }}>
                         <td style={{ padding: '8px' }}><input type="checkbox" checked={isSelected} readOnly /></td>
                         <td style={{ padding: '8px' }}>{r.date}</td>
-                        <td style={{ padding: '8px', fontSize: '0.85rem' }}>{r.description}</td>
+                        <td style={{ padding: '8px', fontSize: '0.85rem' }}>
+                          {editingCsvIndex === i ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <input 
+                                type="text" 
+                                value={editForm.description} 
+                                onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                                style={{ width: '100%', padding: '4px', fontSize: '0.85rem' }} 
+                                placeholder="摘要" 
+                              />
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <select 
+                                  value={editForm.category} 
+                                  onChange={e => setEditForm({...editForm, category: e.target.value})} 
+                                  style={{ width: '50%', fontSize: '0.8rem', padding: '2px' }}
+                                >
+                                  <option value="">カテゴリ未設定</option>
+                                  {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <select 
+                                  value={editForm.recordType} 
+                                  onChange={e => setEditForm({...editForm, recordType: e.target.value as RecordType})} 
+                                  style={{ width: '50%', fontSize: '0.8rem', padding: '2px' }}
+                                >
+                                  <option value="expense_normal">💸 通常支出</option>
+                                  <option value="advance_payment">🤝 友人の立替</option>
+                                  <option value="trip_sandbox">🎒 旅行積立へ移動</option>
+                                  <option value="refund">↩️ 返金・キャンセル</option>
+                                  <option value="income_allowance">💰 入金（通常・仕送り）</option>
+                                  <option value="income_special">💰 入金（特別資産・臨時）</option>
+                                  <option value="advance_recovery">🤝 入金（立替の回収）</option>
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {r.description}
+                              {r.category && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>{r.category} ({r.recordType === 'advance_payment' ? '立替' : r.recordType === 'advance_recovery' ? '立替回収' : r.recordType === 'income_special' ? '特別入金' : r.recordType === 'trip_sandbox' ? '旅行積立' : r.recordType === 'refund' ? '返金' : r.recordType === 'income_allowance' ? '入金' : '通常'})</div>}
+                            </>
+                          )}
+                        </td>
                         <td className="expense" style={{ padding: '8px', textAlign: 'right' }}>{r.expense > 0 ? formatCurrency(r.expense) : ''}</td>
                         <td className="income" style={{ padding: '8px', textAlign: 'right' }}>{r.income > 0 ? formatCurrency(r.income) : ''}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          {editingCsvIndex === i ? (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleCsvEditSave(i); }} 
+                              style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              保存
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setEditingCsvIndex(i);
+                                const isIncome = (r.income || 0) > 0 && (r.expense || 0) === 0;
+                                setEditForm({
+                                  description: r.description,
+                                  category: r.category || (isIncome ? '入金' : 'その他'),
+                                  recordType: r.recordType || (isIncome ? 'income_special' : 'expense_normal')
+                                });
+                              }} 
+                              style={{ background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem' }}
+                            >
+                              ✏️ 編集
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
