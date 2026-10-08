@@ -225,23 +225,28 @@ export const CsvReconcileModal: React.FC<CsvReconcileModalProps> = ({ onClose, c
        if (!cat) return;
        const today = new Date();
        const todayStr = today.toISOString().split('T')[0].replace(/-/g, '/');
-       const isExp = diff > 0;
+       
+       // diff = csvTotal - appTotal
+       // If diff > 0, Bank has MORE money -> App needs INCOME
+       // If diff < 0, Bank has LESS money -> App needs EXPENSE
+       const isExp = diff < 0; 
+       
        newRecords.push({
          date: todayStr,
          category: cat,
          description: 'CSV照合調整',
-         expense: isExp ? diff : 0,
-         income: isExp ? 0 : -diff,
+         expense: isExp ? Math.abs(diff) : 0,
+         income: !isExp ? Math.abs(diff) : 0,
          balance: 0,
          month: todayStr.substring(0, 7).replace('/', '-'),
-         recordType: 'expense_normal' as RecordType,
+         recordType: isExp ? 'expense_normal' : 'income_special',
          reconciled: true});
     } else if (mode === 'overwrite' && diff !== 0 && updates.length > 0) {
        const target = updates[0];
-       if (target.expense > 0 || (target.expense === 0 && target.income === 0 && diff > 0)) {
-         target.expense = Math.round((target.expense + diff) * 100) / 100;
+       if (target.expense > 0) {
+         target.expense = Math.max(0, Math.round((target.expense - diff) * 100) / 100);
        } else if (target.income > 0) {
-         target.income = Math.round((target.income - diff) * 100) / 100;
+         target.income = Math.max(0, Math.round((target.income + diff) * 100) / 100);
        }
     }
     
