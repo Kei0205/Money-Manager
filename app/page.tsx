@@ -331,7 +331,43 @@ function DashboardContent() {
     setIsDeepAnalyzing(true);
     try {
       const isPastMonth = selectedMonth < currentRealMonth;
-      const variableCategoriesForAI = (data?.categoryBudgets || []).filter((c: any) => !(c.name || '').includes('必要経費') && !(c.name || '').includes('固定費'));
+      let variableCategoriesForAI: any[] = [];
+      let aiFreeMoney = 0;
+      let aiEarmarkedMoney = 0;
+
+      if (selectedMonth === currentRealMonth) {
+        variableCategoriesForAI = (data?.categoryBudgets || []).filter((c: any) => !(c.name || '').includes('必要経費') && !(c.name || '').includes('固定費'));
+        const aiEarmarkedCategories = variableCategoriesForAI.filter((c: any) => ['環境・自己投資', '衣服代'].includes(c.name || ''));
+        const aiGeneralFreeCategories = variableCategoriesForAI.filter((c: any) => !['環境・自己投資', '衣服代'].includes(c.name || ''));
+        aiFreeMoney = aiGeneralFreeCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+        aiEarmarkedMoney = aiEarmarkedCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+      } else {
+        const pastSettings = data?.monthlySettings?.[selectedMonth] || { fixedExpenses: [] };
+        const pastRecords = (data?.records || []).filter((r: Transaction) => 
+          r.month === selectedMonth && 
+          r.expense > 0 && 
+          (r.recordType === 'expense_normal' || !r.recordType)
+        );
+        
+        const pastCats = (pastSettings.fixedExpenses || []).filter((c: any) => !(c.name || '').includes('必要経費') && !(c.name || '').includes('固定費'));
+        variableCategoriesForAI = pastCats.map((c: any) => {
+          const spent = pastRecords
+            .filter((r: Transaction) => r.category === c.name)
+            .reduce((sum: number, r: Transaction) => sum + r.expense, 0);
+          const budget = parseFloat(String(c.amount)) || 0;
+          return {
+            name: c.name,
+            spent: Math.round(spent * 100) / 100,
+            pool: budget,
+            remaining: Math.round((budget - spent) * 100) / 100
+          };
+        });
+
+        const pastEarmarked = variableCategoriesForAI.filter((c: any) => ['環境・自己投資', '衣服代'].includes(c.name || ''));
+        const pastGeneral = variableCategoriesForAI.filter((c: any) => !['環境・自己投資', '衣服代'].includes(c.name || ''));
+        aiFreeMoney = pastGeneral.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+        aiEarmarkedMoney = pastEarmarked.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
+      }
       
       const aiExpenses = variableCategoriesForAI.map((c: any) => ({
         category: c.name,
@@ -341,12 +377,6 @@ function DashboardContent() {
 
       const aiTotalVarBudget = aiExpenses.reduce((acc: number, c: any) => acc + c.budget, 0);
       const aiTotalVarSpent = aiExpenses.reduce((acc: number, c: any) => acc + c.spent, 0);
-      
-      const aiEarmarkedCategories = variableCategoriesForAI.filter((c: any) => ['環境・自己投資', '衣服代'].includes(c.name || ''));
-      const aiGeneralFreeCategories = variableCategoriesForAI.filter((c: any) => !['環境・自己投資', '衣服代'].includes(c.name || ''));
-      
-      const aiFreeMoney = aiGeneralFreeCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
-      const aiEarmarkedMoney = aiEarmarkedCategories.reduce((sum: number, c: any) => sum + (c.remaining || 0), 0);
       
       // Generate historical data text for the AI
       let historicalDataText = '';
@@ -717,7 +747,7 @@ ${futureSettings}
           <span style={{ fontStyle: 'italic', color: 'var(--accent-color)', fontWeight: 600 }}>Design your wealth, guided by AI.</span>
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
           過去から学び、未来の体験を創り出す。
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.74</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginLeft: '10px' }}>v1.0.75</span>
         </p>
       </header>
 
